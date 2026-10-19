@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Gallery</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="topbar gallery-topbar">
+        <div class="event-block">
+            <h1 class="event-title">🖼️ Photo Gallery</h1>
+            <div class="info-pill">Browse your saved photos and open them in full size.</div>
+        </div>
+        <a class="secondary-link" href="{{ url_for('home') }}">← Back to camera</a>
+    </div>
+
+    {% if photos %}
+        <div class="gallery-grid">
+            {% for photo in photos %}
+                <div class="gallery-card">
+                    <a href="{{ url_for('static', filename='photos/' + photo) }}" target="_blank" rel="noopener noreferrer">
+                        <img src="{{ url_for('static', filename='photos/' + photo) }}" alt="Gallery photo">
+                    </a>
+                    <p>{{ photo }}</p>
+                    <div class="action-row">
+                        <a class="action-link" href="{{ url_for('static', filename='photos/' + photo) }}" target="_blank" rel="noopener noreferrer">🔍 View</a>
+                        <a class="action-link" href="{{ url_for('download_photo', filename=photo) }}">⬇️ Download</a>
+                        <button class="action-link share-link" type="button" onclick="shareImage('{{ url_for('static', filename='photos/' + photo) }}', '{{ photo }}')">📤 Share</button>
+                        <a class="action-link delete-link" href="{{ url_for('delete_photo', filename=photo) }}" onclick="return confirm('Delete this photo?');">🗑️ Delete</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <p>No photos captured yet.</p>
+            <a class="secondary-link" href="{{ url_for('home') }}">Take your first photo</a>
+        </div>
+    {% endif %}
+
+    <script>
+        async function shareImage(url, filename) {
+            try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: "My Photo Booth Pic",
+                        text: "Check out my photo!",
+                    });
+                    return;
+                }
+            } catch (err) {
+                // fall through to link-based fallbacks
+            }
+
+            const absoluteUrl = window.location.origin + url;
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({ title: "My Photo Booth Pic", url: absoluteUrl });
+                    return;
+                } catch (err) {
+                    // fall back to clipboard
+                }
+            }
+
+            try {
+                await navigator.clipboard.writeText(absoluteUrl);
+                alert("Sharing isn't supported in this browser, so the photo link was copied to your clipboard instead!");
+            } catch (err) {
+                alert("Couldn't share automatically. Right-click (or long-press) the photo to save or copy it.");
+            }
+        }
+    </script>
+</body>
+</html>

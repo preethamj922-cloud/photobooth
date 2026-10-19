@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Strip</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="topbar gallery-topbar">
+        <div class="event-block">
+            <h1 class="event-title">📸 Create 4-Photo Strip</h1>
+            <div class="info-pill">Choose four photos and generate a single strip.</div>
+        </div>
+        <a class="secondary-link" href="{{ url_for('home') }}">← Back to camera</a>
+    </div>
+
+    <form action="{{ url_for('create_strip') }}" method="post">
+        {% if photos %}
+            <div class="strip-controls">
+                <label for="message">Custom Message</label>
+                <input type="text" id="message" name="message" maxlength="40" placeholder="Enter a message for the strip">
+                <label class="checkbox-row">
+                    <input type="checkbox" name="add_border" value="1" checked>
+                    Add border around the strip
+                </label>
+            </div>
+
+            <div class="gallery-grid">
+                {% for photo in photos %}
+                    <label class="gallery-card strip-option">
+                        <img src="{{ url_for('static', filename='photos/' + photo) }}" alt="Strip option">
+                        <p>{{ photo }}</p>
+                        <input type="checkbox" name="photos" value="{{ photo }}">
+                    </label>
+                {% endfor %}
+            </div>
+            <button type="submit">Generate Strip</button>
+        {% else %}
+            <div class="empty-state">
+                <p>No photos available yet.</p>
+                <a class="secondary-link" href="{{ url_for('home') }}">Capture your first photo</a>
+            </div>
+        {% endif %}
+    </form>
+</body>
+</html>

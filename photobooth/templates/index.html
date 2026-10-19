@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Booth</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <div class="topbar">
+        <div class="event-block">
+            <h1 class="event-title">📸 My Photo Booth</h1>
+            <div class="info-pill">Capture, filter, and share your favorite moments.</div>
+        </div>
+        <div id="liveClock" class="live-clock" aria-live="polite">--:--</div>
+    </div>
+
+    {% if camera_error %}
+        <div class="error-banner">⚠️ Couldn't reach the camera. Check that it's plugged in and not being used by another app, then try again.</div>
+    {% endif %}
+
+    <div class="camera-container">
+
+        <img id="videoFeed" src="{{ url_for('video', filter='none') }}" width="640" height="480" alt="Live Camera">
+
+        <div id="flashOverlay" class="flash-overlay"></div>
+        <div id="countdown"></div>
+        <div id="burstBadge" class="burst-badge"></div>
+
+    </div>
+
+    <br>
+
+    <div class="filter-strip" id="filterStrip">
+        {% for key, label in filters.items() %}
+            <button
+                type="button"
+                class="filter-chip{% if key == 'none' %} active{% endif %}"
+                data-filter="{{ key }}">{{ label }}</button>
+        {% endfor %}
+    </div>
+
+    <br>
+
+    <label for="timerSelect"><b>Countdown:</b></label>
+
+    <select id="timerSelect">
+        <option value="3" selected>3 Seconds</option>
+        <option value="5">5 Seconds</option>
+        <option value="10">10 Seconds</option>
+    </select>
+
+    <br><br>
+
+    <button id="captureBtn">📸 Capture Photo</button>
+    <button id="burstBtn" type="button">🎞️ Burst: 4 Photos → 1 Strip</button>
+    <button id="fullscreenBtn" type="button">🖥️ Fullscreen</button>
+
+    <br><br>
+
+    <a class="secondary-link" href="{{ url_for('gallery') }}">🖼️ View Gallery</a>
+    <a class="secondary-link" href="{{ url_for('strip_page') }}">📷 Create 4-Photo Strip</a>
+    <a class="secondary-link" href="{{ url_for('print_strip_page') }}">🖨️ Print Strip</a>
+
+    <div class="info-pill small-pill">Burst mode auto-captures 4 shots back-to-back and instantly builds the strip for you.</div>
+
+    <br><br>
+
+    {% if photo %}
+        <h2>Last Captured Photo</h2>
+
+        <img
+            id="lastPhoto"
+            src="{{ url_for('static', filename='photos/' + photo) }}?{{ photo }}"
+            width="400"
+            alt="Captured Photo">
+
+        <br>
+        <button type="button" class="share-btn" onclick="shareImage('{{ url_for('static', filename='photos/' + photo) }}', '{{ photo }}')">📤 Share</button>
+        <a class="secondary-link" href="{{ url_for('download_photo', filename=photo) }}">⬇️ Download</a>
+    {% endif %}
+
+    <script>
+
+        const button = document.getElementById("captureBtn");
+        const burstButton = document.getElementById("burstBtn");
+        const fullscreenButton = document.getElementById("fullscreenBtn");
+        const countdown = document.getElementById("countdown");
+        const liveClock = document.getElementById("liveClock");
+        const flashOverlay = document.getElementById("flashOverlay");
+        const cameraContainer = document.querySelector(".camera-container");
+        const videoFeed = document.getElementById("videoFeed");
+        const filterStrip = document.getElementById("filterStrip");
+        const burstBadge = document.getElementById("burstBadge");
+
+        let currentFilter = "none";
+
+        function setFilter(filterName) {
+            currentFilter = filterName;
+            videoFeed.src = "{{ url_for('video') }}?filter=" + encodeURIComponent(filterName);
+
+            document.querySelectorAll(".filter-chip").forEach(function (chip) {
+                chip.classList.toggle("active", chip.dataset.filter === filterName);
+            });
+        }
+
+        filterStrip.addEventListener("click", function (event) {
+            const chip = event.target.closest(".filter-chip");
+            if (!chip) return;
+            setFilter(chip.dataset.filter);
+        });
+
+        function playShutterSound() {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+
+            if (!AudioContextClass) {
+                return;
+            }
+
+            const audioContext = new AudioContextClass();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = "square";
+            oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.08);
+
+            gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.12);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.13);
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                if (cameraContainer.requestFullscreen) {
+                    cameraContainer.requestFullscreen();
+                } else if (cameraContainer.webkitRequestFullscreen) {
+                    cameraContainer.webkitRequestFullscreen();
+                } else if (cameraContainer.msRequestFullscreen) {
+                    cameraContainer.msRequestFullscreen();
+                }
+            } else if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            liveClock.textContent = now.toLocaleString();
+        }
+
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        fullscreenButton.addEventListener("click", function () {
+            toggleFullscreen();
+        });
+
+        function handleFullscreenChange(isFull) {
+            cameraContainer.classList.toggle("fullscreen-mode", isFull);
+            fullscreenButton.textContent = isFull ? "⬅️ Exit Fullscreen" : "🖥️ Fullscreen";
+        }
+
+        document.addEventListener("fullscreenchange", function () {
+            handleFullscreenChange(!!document.fullscreenElement);
+        });
+
+        document.addEventListener("webkitfullscreenchange", function () {
+            handleFullscreenChange(!!document.webkitFullscreenElement);
+        });
+
+        // Runs a visual countdown + flash + shutter sound, resolving once the
+        // "smile" moment has passed. Shared by both single-shot and burst mode
+        // so the single capture button's behavior stays exactly as before.
+        function runCountdownAndFlash(seconds) {
+            return new Promise(function (resolve) {
+                let count = seconds;
+                countdown.textContent = count;
+
+                const timer = setInterval(function () {
+                    count--;
+
+                    if (count > 0) {
+                        countdown.textContent = count;
+                    } else if (count === 0) {
+                        countdown.textContent = "📸 Smile!";
+                        flashOverlay.classList.add("active");
+                        playShutterSound();
+                    } else {
+                        clearInterval(timer);
+                        setTimeout(function () {
+                            flashOverlay.classList.remove("active");
+                            countdown.textContent = "";
+                            resolve();
+                        }, 250);
+                    }
+                }, 1000);
+            });
+        }
+
+        button.addEventListener("click", function () {
+            button.disabled = true;
+            burstButton.disabled = true;
+            flashOverlay.classList.remove("active");
+
+            const seconds = parseInt(document.getElementById("timerSelect").value);
+
+            runCountdownAndFlash(seconds).then(function () {
+                window.location.href = "{{ url_for('capture') }}?filter=" + encodeURIComponent(currentFilter);
+            });
+        });
+
+        burstButton.addEventListener("click", async function () {
+            button.disabled = true;
+            burstButton.disabled = true;
+            flashOverlay.classList.remove("active");
+
+            const seconds = parseInt(document.getElementById("timerSelect").value);
+            const captured = [];
+
+            try {
+                for (let shot = 1; shot <= 4; shot++) {
+                    burstBadge.textContent = "Shot " + shot + " of 4";
+                    burstBadge.classList.add("active");
+
+                    await runCountdownAndFlash(shot === 1 ? seconds : Math.min(seconds, 3));
+
+                    const response = await fetch(
+                        "{{ url_for('capture') }}?ajax=1&filter=" + encodeURIComponent(currentFilter)
+                    );
+                    const data = await response.json();
+
+                    if (!data.ok) {
+                        throw new Error(data.error || "Capture failed");
+                    }
+
+                    captured.push(data.filename);
+                }
+
+                burstBadge.textContent = "Building your strip...";
+
+                const stripResponse = await fetch("{{ url_for('create_strip_ajax') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ photos: captured, add_border: true, message: "" }),
+                });
+                const stripData = await stripResponse.json();
+
+                if (!stripData.ok) {
+                    throw new Error(stripData.error || "Strip creation failed");
+                }
+
+                window.location.href = "{{ url_for('print_strip_page') }}";
+            } catch (err) {
+                burstBadge.textContent = "";
+                burstBadge.classList.remove("active");
+                alert("Burst capture couldn't finish: " + err.message);
+                button.disabled = false;
+                burstButton.disabled = false;
+            }
+        });
+
+        async function shareImage(url, filename) {
+            try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: "My Photo Booth Pic",
+                        text: "Check out my photo!",
+                    });
+                    return;
+                }
+            } catch (err) {
+                // fall through to the link-based fallbacks below
+            }
+
+            const absoluteUrl = window.location.origin + url;
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({ title: "My Photo Booth Pic", url: absoluteUrl });
+                    return;
+                } catch (err) {
+                    // user cancelled or share failed - fall back to clipboard
+                }
+            }
+
+            try {
+                await navigator.clipboard.writeText(absoluteUrl);
+                alert("Sharing isn't supported in this browser, so the photo link was copied to your clipboard instead!");
+            } catch (err) {
+                alert("Couldn't share automatically. Right-click (or long-press) the photo to save or copy it.");
+            }
+        }
+
+    </script>
+
+</body>
+</html>

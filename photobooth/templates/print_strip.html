@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Strip</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+        body {
+            padding: 24px;
+            background: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+
+        .print-card {
+            max-width: 700px;
+            margin: auto;
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.15);
+            text-align: center;
+        }
+
+        .print-preview img {
+            width: 100%;
+            max-width: 500px;
+            border: 2px solid #333;
+            border-radius: 10px;
+        }
+
+        .buttons {
+            margin-top: 20px;
+        }
+
+        .buttons button,
+        .buttons a {
+            margin: 5px;
+            padding: 10px 18px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .print-card {
+                box-shadow: none;
+                border: none;
+                max-width: 100%;
+            }
+
+            .print-preview img {
+                max-width: 100%;
+                border: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="print-card">
+
+    <div class="topbar gallery-topbar no-print">
+        <div class="event-block">
+            <h1 class="event-title">🖨️ Print Strip</h1>
+            <div class="info-pill">
+                Preview and print your generated photo strip.
+            </div>
+        </div>
+
+        <a class="secondary-link" href="{{ url_for('home') }}">
+            ← Back to Camera
+        </a>
+    </div>
+
+    {% if latest_strip %}
+
+        {% set image_url = url_for('static', filename='photos/' + latest_strip) %}
+
+        <div class="print-preview">
+            <img src="{{ image_url }}" alt="Generated Strip">
+        </div>
+
+        <div class="buttons no-print">
+
+            <button onclick="window.print()">
+                🖨️ Print
+            </button>
+
+            <button id="shareBtn"
+                    data-url="{{ image_url }}"
+                    data-file="{{ latest_strip }}">
+                📤 Share
+            </button>
+
+            <a href="{{ url_for('download_photo', filename=latest_strip) }}">
+                ⬇️ Download
+            </a>
+
+        </div>
+
+    {% else %}
+
+        <div class="empty-state">
+            <p>No strip has been created yet.</p>
+
+            <a class="secondary-link" href="{{ url_for('strip_page') }}">
+                Create a Strip
+            </a>
+        </div>
+
+    {% endif %}
+
+</div>
+
+<script>
+
+async function shareImage(url, filename) {
+
+    try {
+
+        const absoluteUrl = new URL(url, window.location.href).href;
+
+        const response = await fetch(absoluteUrl);
+
+        const blob = await response.blob();
+
+        const file = new File(
+            [blob],
+            filename,
+            {
+                type: blob.type || "image/jpeg"
+            }
+        );
+
+        if (navigator.canShare &&
+            navigator.canShare({ files: [file] })) {
+
+            await navigator.share({
+                files: [file],
+                title: "My Photo Booth Strip",
+                text: "Check out my Photo Booth strip!"
+            });
+
+            return;
+        }
+
+        if (navigator.share) {
+
+            await navigator.share({
+                title: "My Photo Booth Strip",
+                url: absoluteUrl
+            });
+
+            return;
+        }
+
+        await navigator.clipboard.writeText(absoluteUrl);
+
+        alert("The image link has been copied to your clipboard.");
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert("Unable to share this image.");
+
+    }
+
+}
+
+const shareBtn = document.getElementById("shareBtn");
+
+if (shareBtn) {
+    shareBtn.addEventListener("click", function () {
+        shareImage(
+            this.dataset.url,
+            this.dataset.file
+        );
+    });
+}
+
+</script>
+
+</body>
+</html>
